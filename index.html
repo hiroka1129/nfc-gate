@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NFC入退場・食事券</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f5f6f8;--card:#fff;--tx:#1c2430;--sub:#6b7686;--ac:#1d6fd8;--ok:#1a9a54;--ng:#d6342c;--wn:#d98b00;--pu:#7b4fd8;--bd:#dde1e8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161c;--card:#1c222b;--tx:#e8ecf2;--sub:#97a1b0;--ac:#5b9dff;--ok:#3ecf80;--ng:#ff6b62;--wn:#ffb340;--pu:#a98bff;--bd:#2d3542}}
+:root[data-theme="dark"]{--bg:#12161c;--card:#1c222b;--tx:#e8ecf2;--sub:#97a1b0;--ac:#5b9dff;--ok:#3ecf80;--ng:#ff6b62;--wn:#ffb340;--pu:#a98bff;--bd:#2d3542}
+html{color-scheme:light dark;scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;padding:12px}
+h1{font-size:18px;margin:4px 0 10px}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button{flex:1;padding:10px 4px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;font-size:14px}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:10px}
+.card b{display:block;margin-bottom:4px}
+input,textarea{width:100%;padding:12px;font-size:16px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx);margin:6px 0;font-family:inherit}
+textarea{font-size:12px;word-break:break-all}
+.btn{width:100%;padding:14px;font-size:16px;border:0;border-radius:10px;background:var(--ac);color:#fff;margin-top:6px}
+.btn.sec{background:transparent;color:var(--ac);border:1px solid var(--ac)}
+.btn.ng{background:var(--ng)}
+.mode{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mode button{padding:16px 4px;font-size:17px;font-weight:700;border-radius:12px;border:2px solid var(--bd);background:var(--card);color:var(--tx)}
+.mode .in.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.mode .out.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.mode .ord.on{background:var(--wn);border-color:var(--wn);color:#fff}
+.mode .chg.on{background:var(--pu);border-color:var(--pu);color:#fff}
+#info{margin:8px 0 0;font-size:14px;font-weight:600;text-align:center}
+#res{text-align:center;padding:26px 10px;border-radius:14px;font-size:22px;font-weight:700;background:var(--card);border:3px solid var(--bd);min-height:160px;display:flex;flex-direction:column;justify-content:center;gap:8px;margin-top:10px}
+#res small{font-weight:400;font-size:15px}
+#res.ok{border-color:var(--ok);color:var(--ok)}
+#res.ng{border-color:var(--ng);color:var(--ng)}
+.row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--bd);font-size:14px;gap:8px}
+.row:last-child{border:0}
+.badge{padding:3px 10px;border-radius:99px;font-size:12px;color:#fff}
+.b-in{background:var(--ok)}.b-out{background:var(--sub)}
+.sub{color:var(--sub);font-size:12px}
+.mini{padding:5px 10px;font-size:12px;border:1px solid var(--ac);color:var(--ac);background:transparent;border-radius:8px;margin-left:4px}
+ol{padding-left:20px;font-size:13px;line-height:1.7;margin:6px 0}
+.hide{display:none}
+</style>
+</head>
+<body>
+<h1>NFC入退場・食事券</h1>
+<div class="tabs">
+  <button data-t="gate" class="on">ゲート</button>
+  <button data-t="adm">管理</button>
+  <button data-t="log">残高・履歴</button>
+</div>
+
+<section id="gate">
+  <div class="mode">
+    <button class="in" id="mIn">入場</button>
+    <button class="out" id="mOut">退場</button>
+    <button class="ord" id="mOrd">オーダー</button>
+    <button class="chg" id="mChg">チャージ</button>
+  </div>
+  <div id="info"></div>
+  <div id="res">待機中<small>モードを選び、タグをiPhoneにかざしてください</small></div>
+  <button class="btn hide" id="snd">🔊 タップして音を鳴らす</button>
+  <div class="sub" style="margin-top:8px">※ iPhoneの仕様で、音は画面を1回タップしたときに鳴る場合があります。</div>
+</section>
+
+<section id="adm" class="hide">
+  <div id="lockBox" class="card">
+    <label id="lockLbl"></label>
+    <input id="pw" type="password" autocomplete="off">
+    <button class="btn" id="unlock">ロック解除</button>
+    <div class="sub" id="lockMsg" style="color:var(--ng)"></div>
+  </div>
+
+  <div id="admBox" class="hide">
+    <div class="card">
+      <b>食事券チャージ</b>
+      <div class="sub">現金を受け取ったら金額を入力 →「セット」→ ゲートでタグをかざす</div>
+      <input id="cash" type="number" inputmode="numeric" placeholder="受け取った金額（円）">
+      <div id="cashN" class="sub"></div>
+      <button class="btn" id="setP">チャージ枚数をセットしてゲートへ</button>
+    </div>
+
+    <div class="card">
+      <b>本日の集計</b><div id="sum"></div>
+    </div>
+
+    <div class="card">
+      <b>タグ登録（名前は10文字まで）</b>
+      <input id="nm" placeholder="例：山田太郎" maxlength="10">
+      <button class="btn" id="mk">タグ用URLを作成</button>
+      <div id="out" class="hide">
+        <div class="sub" id="who" style="margin-top:10px"></div>
+        <textarea id="url" rows="4" readonly></textarea>
+        <button class="btn sec" id="cp">URLをコピー</button>
+        <ol><li>アプリ「NFC Tools」→「書く」→「レコードを追加」→「URL/URI」</li><li>URLを貼り付けて「OK」→「書き込む」→タグをかざす</li></ol>
+      </div>
+    </div>
+
+    <div class="card"><b>登録者（残高修正・URL再表示）</b><div id="ausers"></div></div>
+
+    <div class="card">
+      <b>設定</b>
+      <label class="sub">食事券1枚の金額（円）</label><input id="price" type="number" inputmode="numeric">
+      <label class="sub">新しいパスワード（変えるときだけ）</label><input id="npw" type="password" autocomplete="off">
+      <label class="sub">このページのURL（通常は変更不要）</label><input id="base">
+      <button class="btn" id="saveS">設定を保存</button>
+      <button class="btn sec" id="bk">バックアップをコピー</button>
+      <textarea id="rs" rows="3" placeholder="復元：バックアップを貼り付け"></textarea>
+      <button class="btn sec" id="rsB">貼り付けたデータで復元</button>
+      <button class="btn sec" id="clr">履歴・登録を全消去</button>
+      <button class="btn ng" id="lockNow">ロックする</button>
+      <div class="sub" id="sMsg"></div>
+    </div>
+  </div>
+</section>
+
+<section id="log" class="hide">
+  <div class="card"><b>登録者・残り枚数</b><div id="users"></div></div>
+  <div class="card"><b>履歴（新しい順）</b><div id="hist"></div></div>
+</section>
+
+<script>
+var KEY="nfcgate_v3",DB={users:{},log:[],mode:"in",base:location.href.replace(/[#?].*$/,""),price:500,pw:"",unlockUntil:0,pending:0,last:{k:"",t:0}},ac=null,pend=null;
+try{var s=localStorage.getItem(KEY)||localStorage.getItem("nfcgate_v2");if(s){var o=JSON.parse(s);for(var k in o)DB[k]=o[k];}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}
+function $(i){return document.getElementById(i)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]});}
+function fmt(t){var d=new Date(t);return (d.getMonth()+1)+"/"+d.getDate()+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)+":"+("0"+d.getSeconds()).slice(-2);}
+function enc(s){return btoa(unescape(encodeURIComponent(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");}
+function dec(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";return decodeURIComponent(escape(atob(s)));}
+function mkUrl(id,name){return DB.base.replace(/#.*$/,"")+"#u"+enc(id+"|"+name);}
+function hp(s){var h=5381;s="nfc|"+s;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return String(h);}
+function unlocked(){return Date.now()<DB.unlockUntil;}
+function touch(){if(unlocked())DB.unlockUntil=Date.now()+300000;}
+function yen(n){return n.toLocaleString("ja-JP")+"円";}
+
+/* 音：ピッ=1回 ピッピッ=2回 ブー=エラー */
+function tone(f,t,d,type){var o=ac.createOscillator(),g=ac.createGain();o.type=type||"sine";o.frequency.value=f;o.connect(g);g.connect(ac.destination);var n=ac.currentTime+t;g.gain.setValueAtTime(0.3,n);g.gain.exponentialRampToValueAtTime(0.001,n+d);o.start(n);o.stop(n+d+0.02);}
+function doBeep(k){if(k=="e"){tone(300,0,0.5,"sawtooth");}else{for(var i=0;i<k;i++)tone(1800,i*0.22,0.12);}}
+function play(k){
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume&&ac.resume();}catch(e){return;}
+  setTimeout(function(){if(ac.state=="running"){doBeep(k);$("snd").classList.add("hide");pend=null;}else{pend=k;$("snd").classList.remove("hide");}},150);
+}
+$("snd").onclick=function(){
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();}catch(e){}
+  var k=pend;pend=null;$("snd").classList.add("hide");setTimeout(function(){if(k)doBeep(k);},100);
+};
+
+function show(cls,main,sub){
+  var r=$("res");r.className=cls;r.innerHTML=main+"<small>"+sub+"</small>";
+  clearTimeout(show.t);show.t=setTimeout(function(){r.className="";r.innerHTML="待機中<small>モードを選び、タグをiPhoneにかざしてください</small>";},10000);
+}
+function addLog(id,name,act,d){DB.log.unshift({t:Date.now(),id:id,name:name,act:act,d:d||0});if(DB.log.length>500)DB.log.length=500;}
+
+/* 入退場・オーダー・チャージ処理 */
+function process(u){
+  var rec=DB.users[u.id];if(!rec)rec=DB.users[u.id]={name:u.name,inside:false,bal:0};
+  if(rec.bal==null)rec.bal=0;
+  var n=esc(rec.name),m=DB.mode,id=u.id,nm=rec.name;
+  if(m=="in"){
+    if(rec.inside){addLog(id,nm,"入場拒否");play("e");show("ng","入場できません<br>"+n,"退場処理がされていません");}
+    else{rec.inside=true;addLog(id,nm,"入場");play(1);show("ok","入場 OK<br>"+n,fmt(Date.now()));}
+  }else if(m=="out"){
+    if(!rec.inside){addLog(id,nm,"退場拒否");play("e");show("ng","退場できません<br>"+n,"入場記録がありません");}
+    else{rec.inside=false;addLog(id,nm,"退場");play(2);show("ok","退場 OK<br>"+n,fmt(Date.now()));}
+  }else if(m=="ord"){
+    if(rec.bal<1){addLog(id,nm,"オーダー拒否");play("e");show("ng","食事券がありません<br>"+n,"チャージが必要です");}
+    else{rec.bal-=1;addLog(id,nm,"オーダー",-1);play(1);show("ok","オーダー OK<br>"+n,"残り "+rec.bal+" 枚");}
+  }else if(m=="chg"){
+    if(!unlocked()){play("e");show("ng","管理者ロック中","管理画面でロック解除してください");}
+    else if(DB.pending<1){play("e");show("ng","枚数が未設定です","管理画面で金額を入力してください");}
+    else{var d=DB.pending;rec.bal+=d;DB.pending=0;touch();addLog(id,nm,"チャージ",d);play(3);show("ok","チャージ +"+d+"枚<br>"+n,"残り "+rec.bal+" 枚");}
+  }
+  save();render();
+}
+
+/* タグ（URL）読み取り */
+function fromHash(){
+  var h=location.hash.replace(/^#/,"");
+  if(h.charAt(0)!="u"||h.length<3)return;
+  try{
+    var p=dec(h.slice(1)),i=p.indexOf("|"),id=p.slice(0,i),name=p.slice(i+1);
+    if(!id||!name)return;
+    var now=Date.now();if(DB.last.k==h&&now-DB.last.t<3000)return;
+    DB.last={k:h,t:now};save();process({id:id,name:name});
+  }catch(e){show("ng","タグを読めません","登録し直してください");}
+}
+
+/* モード・タブ */
+function setMode(m){
+  if(m=="chg"&&!unlocked()){show("ng","チャージは管理者のみ","管理タブでロック解除してください");tab("adm");return;}
+  DB.mode=m;save();
+  ["In","Out","Ord","Chg"].forEach(function(x){$("m"+x).classList.toggle("on",{In:"in",Out:"out",Ord:"ord",Chg:"chg"}[x]==m);});
+  info();
+}
+function info(){
+  var t="";
+  if(DB.mode=="ord")t="1回のオーダーで食事券1枚（"+yen(DB.price)+"分）を使用";
+  if(DB.mode=="chg")t=DB.pending>0?"チャージ待ち："+DB.pending+"枚（"+yen(DB.pending*DB.price)+"）→ タグをかざす":"枚数が未設定です（管理タブで入力）";
+  $("info").textContent=t;
+}
+function tab(t){
+  document.querySelectorAll(".tabs button").forEach(function(x){x.classList.toggle("on",x.dataset.t==t)});
+  ["gate","adm","log"].forEach(function(x){$(x).classList.toggle("hide",x!=t)});
+}
+document.querySelectorAll(".tabs button").forEach(function(b){b.onclick=function(){tab(b.dataset.t)};});
+$("mIn").onclick=function(){setMode("in")};$("mOut").onclick=function(){setMode("out")};
+$("mOrd").onclick=function(){setMode("ord")};$("mChg").onclick=function(){setMode("chg")};
+
+/* 管理者ロック */
+$("unlock").onclick=function(){
+  var v=$("pw").value;if(!v)return;
+  if(!DB.pw)DB.pw=hp(v);else if(hp(v)!=DB.pw){$("lockMsg").textContent="パスワードが違います";return;}
+  DB.unlockUntil=Date.now()+300000;$("pw").value="";$("lockMsg").textContent="";save();render();
+};
+function lockNow(){DB.unlockUntil=0;DB.pending=0;if(DB.mode=="chg")DB.mode="ord";save();setMode(DB.mode);render();}
+$("lockNow").onclick=lockNow;
+setInterval(function(){if(!unlocked()&&!$("admBox").classList.contains("hide")){lockNow();}},5000);
+
+/* チャージ設定 */
+$("cash").oninput=function(){
+  var v=parseInt($("cash").value)||0,n=Math.floor(v/DB.price),r=v-n*DB.price;
+  $("cashN").textContent=n>0?"→ "+n+"枚"+(r?"（端数"+yen(r)+"は対象外）":""):"";
+};
+$("setP").onclick=function(){
+  var n=Math.floor((parseInt($("cash").value)||0)/DB.price);if(n<1)return;
+  touch();DB.pending=n;$("cash").value="";$("cashN").textContent="";save();setMode("chg");tab("gate");
+};
+
+/* 登録 */
+function showUrl(id,name){$("url").value=mkUrl(id,name);$("who").textContent="対象："+name;$("out").classList.remove("hide");}
+$("mk").onclick=function(){
+  var name=$("nm").value.trim();if(!name)return;touch();
+  var id=Math.random().toString(36).slice(2,8);
+  DB.users[id]={name:name,inside:false,bal:0};save();render();showUrl(id,name);$("nm").value="";
+};
+$("cp").onclick=function(){
+  var t=$("url");t.select();t.setSelectionRange(0,99999);
+  try{navigator.clipboard.writeText(t.value);}catch(e){}try{document.execCommand("copy");}catch(e){}
+  $("cp").textContent="コピーしました";setTimeout(function(){$("cp").textContent="URLをコピー";},1500);
+};
+
+/* 設定・バックアップ */
+$("saveS").onclick=function(){
+  var p=parseInt($("price").value);if(p>0)DB.price=p;
+  var np=$("npw").value;if(np)DB.pw=hp(np);
+  DB.base=$("base").value.trim()||DB.base;touch();save();$("npw").value="";$("sMsg").textContent="保存しました";info();render();
+};
+$("bk").onclick=function(){
+  var t=$("rs");t.value=JSON.stringify(DB);t.select();t.setSelectionRange(0,9999999);
+  try{navigator.clipboard.writeText(t.value);}catch(e){}try{document.execCommand("copy");}catch(e){}
+  $("sMsg").textContent="コピーしました（メモ等に保存してください）";
+};
+$("rsB").onclick=function(){
+  try{var o=JSON.parse($("rs").value);if(!o.users)throw 0;if(!confirm("現在のデータを上書きして復元しますか？"))return;
+    for(var k in o)DB[k]=o[k];save();render();info();$("sMsg").textContent="復元しました";}catch(e){$("sMsg").textContent="データが正しくありません";}
+};
+$("clr").onclick=function(){if(confirm("登録者と履歴をすべて消去しますか？")){DB.users={};DB.log=[];DB.pending=0;save();render();info();}};
+
+function adjust(id){
+  var u=DB.users[id],v=prompt(u.name+" の新しい残り枚数（現在 "+(u.bal||0)+" 枚）",u.bal||0);
+  if(v===null)return;var n=parseInt(v);if(isNaN(n)||n<0)return;
+  var d=n-(u.bal||0);u.bal=n;addLog(id,u.name,"修正",d);touch();save();render();
+}
+
+function render(){
+  var u=unlocked();
+  $("lockBox").classList.toggle("hide",u);$("admBox").classList.toggle("hide",!u);
+  $("lockLbl").textContent=DB.pw?"管理者パスワード":"初回：管理者パスワードを決めてください";
+  $("unlock").textContent=DB.pw?"ロック解除":"設定して開く";
+  $("price").value=DB.price;$("base").value=DB.base;
+  var ids=Object.keys(DB.users);
+  $("users").innerHTML=ids.length?ids.map(function(i){var x=DB.users[i];
+    return '<div class="row"><span>'+esc(x.name)+'</span><span><b style="display:inline">'+(x.bal||0)+'枚</b> <span class="badge '+(x.inside?"b-in":"b-out")+'">'+(x.inside?"在室":"退場済")+'</span></span></div>'}).join(""):'<div class="sub">まだ登録がありません</div>';
+  $("ausers").innerHTML=ids.length?ids.map(function(i){var x=DB.users[i];
+    return '<div class="row"><span>'+esc(x.name)+' <span class="sub">'+(x.bal||0)+'枚</span></span><span><button class="mini" data-a="u" data-id="'+i+'">URL</button><button class="mini" data-a="j" data-id="'+i+'">修正</button></span></div>'}).join(""):'<div class="sub">まだ登録がありません</div>';
+  $("ausers").querySelectorAll(".mini").forEach(function(b){b.onclick=function(){var id=b.dataset.id;if(b.dataset.a=="u")showUrl(id,DB.users[id].name);else adjust(id);};});
+  $("hist").innerHTML=DB.log.length?DB.log.slice(0,60).map(function(l){
+    return '<div class="row"><span>'+esc(l.name)+'<br><span class="sub">'+fmt(l.t)+'</span></span><span>'+l.act+(l.d?" "+(l.d>0?"+":"")+l.d:"")+'</span></div>'}).join(""):'<div class="sub">履歴なし</div>';
+  var today=new Date().toDateString(),ch=0,od=0,tot=0;
+  DB.log.forEach(function(l){if(new Date(l.t).toDateString()==today){if(l.act=="チャージ")ch+=l.d;if(l.act=="オーダー")od++;}});
+  ids.forEach(function(i){tot+=DB.users[i].bal||0;});
+  $("sum").innerHTML='<div class="row"><span>チャージ枚数</span><span>'+ch+'枚（受け取る現金 '+yen(ch*DB.price)+'）</span></div><div class="row"><span>オーダー使用</span><span>'+od+'枚</span></div><div class="row"><span>未使用の残り合計</span><span>'+tot+'枚</span></div>';
+  info();
+}
+
+if(!unlocked()){DB.pending=0;if(DB.mode=="chg")DB.mode="ord";}
+setMode(DB.mode);render();fromHash();
+window.addEventListener("hashchange",fromHash);
+</script>
+</body>
+</html>
